@@ -17,10 +17,13 @@ const (
 	defaultNumbered = "%b copy %n%e"
 )
 
-var verbose = flag.Bool("v", false, "cause dp to be verbose, showing files as they are duplicated")
+var (
+	dryRun  = flag.Bool("n", false, "do not duplicate files, but show what would be done instead; implies -v")
+	verbose = flag.Bool("v", false, "cause dp to be verbose, showing files as they are duplicated")
+)
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: dp [-v] source ...")
+	fmt.Fprintln(os.Stderr, "usage: dp [-n] [-v] source ...")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
@@ -41,10 +44,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("bad duplicate format: %v", err)
 	}
+	cp := copier{
+		dryRun:  *dryRun,
+		verbose: *verbose,
+		output:  os.Stdout,
+	}
 
 	exitCode := 0
 	for _, src := range flag.Args() {
-		if err := duplicate(src, rule, *verbose); err != nil {
+		if err := duplicate(src, rule, cp); err != nil {
 			log.Print(err)
 			exitCode = 1
 		}
@@ -52,12 +60,12 @@ func main() {
 	os.Exit(exitCode)
 }
 
-func duplicate(src string, rule dupRule, verbose bool) error {
+func duplicate(src string, rule dupRule, cp copier) error {
 	dst, err := nextDupPath(src, rule)
 	if err != nil {
 		return err
 	}
-	return copyPath(src, dst, verbose)
+	return cp.copyPath(src, dst)
 }
 
 var (
@@ -99,12 +107,19 @@ func nextDupPath(src string, rule dupRule) (string, error) {
 
 const preservedDirBits = os.ModeSetuid | os.ModeSetgid | os.ModeSticky
 
-// copyPath recursively copies src to dst. If verbose is true, copied paths
-// are reported to stdout. copyPath stops at the first error and returns it.
+// A copier copies source paths to destination paths.
+type copier struct {
+	dryRun  bool      // report copies without creating them
+	verbose bool      // report copies as they are made
+	output  io.Writer // destination for reports
+}
+
+// copyPath recursively copies src to dst. If an error occurs, copyPath stops
+// and leaves any partial copy in place.
 //
 // Note: cp -R variants differ in how umask and special bits affect regular
 // files and directories. For now, dp intentionally keeps this simple.
-func copyPath(src, dst string, verbose bool) error {
+func (c copier) copyPath(src, dst string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
 		return err
@@ -114,26 +129,24 @@ func copyPath(src, dst string, verbose bool) error {
 	switch mode & os.ModeType {
 	case os.ModeDir:
 		// Add owner access while copying into the directory.
-		if err := os.Mkdir(dst, mode&os.ModePerm|0o700); err != nil {
+		if err := c.mkdir(dst, mode&os.ModePerm|0o700); err != nil {
 			return err
 		}
-		if verbose {
-			fmt.Printf("%s -> %s\n", src, dst)
-		}
+		c.report(src, dst)
+
 		ents, err := os.ReadDir(src)
 		if err == nil {
 			for _, e := range ents {
-				if err = copyPath(
+				if err = c.copyPath(
 					filepath.Join(src, e.Name()),
 					filepath.Join(dst, e.Name()),
-					verbose,
 				); err != nil {
 					break
 				}
 			}
 		}
 		// Restore the mode after trying to copy the contents.
-		if err2 := os.Chmod(dst, mode&(os.ModePerm|preservedDirBits)); err == nil {
+		if err2 := c.chmod(dst, mode&(os.ModePerm|preservedDirBits)); err == nil {
 			err = err2
 		}
 		return err
@@ -142,30 +155,31 @@ func copyPath(src, dst string, verbose bool) error {
 		if err != nil {
 			return err
 		}
-		if err := os.Symlink(target, dst); err != nil {
+		if err := c.symlink(target, dst); err != nil {
 			return err
 		}
 	case 0:
-		if err := copyFile(src, dst, mode&os.ModePerm); err != nil {
+		if err := c.copyFile(src, dst, mode&os.ModePerm); err != nil {
 			return err
 		}
 	default:
 		return &os.PathError{Op: "copy", Path: src, Err: os.ErrInvalid}
 	}
 
-	if verbose {
-		fmt.Printf("%s -> %s\n", src, dst)
-	}
+	c.report(src, dst)
 	return nil
 }
 
-func copyFile(src, dst string, perm os.FileMode) error {
+func (c copier) copyFile(src, dst string, perm os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
+	if c.dryRun {
+		return nil
+	}
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
 	if err != nil {
 		return err
@@ -176,4 +190,32 @@ func copyFile(src, dst string, perm os.FileMode) error {
 		return &os.PathError{Op: "copy", Path: dst, Err: err}
 	}
 	return out.Close()
+}
+
+func (c copier) mkdir(name string, perm os.FileMode) error {
+	if c.dryRun {
+		return nil
+	}
+	return os.Mkdir(name, perm)
+}
+
+func (c copier) chmod(name string, perm os.FileMode) error {
+	if c.dryRun {
+		return nil
+	}
+	return os.Chmod(name, perm)
+}
+
+func (c copier) symlink(oldname, newname string) error {
+	if c.dryRun {
+		return nil
+	}
+	return os.Symlink(oldname, newname)
+}
+
+func (c copier) report(src, dst string) {
+	if (!c.verbose && !c.dryRun) || c.output == nil {
+		return
+	}
+	fmt.Fprintln(c.output, src, "->", dst)
 }

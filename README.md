@@ -13,7 +13,8 @@ go install github.com/CatsDeservePets/dp@latest
 ## Usage
 
 ```
-usage: dp [-v] source ...
+usage: dp [-n] [-v] source ...
+  -n	do not duplicate files, but show what would be done instead; implies -v
   -v	cause dp to be verbose, showing files as they are duplicated
 ```
 
