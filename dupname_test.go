@@ -4,30 +4,90 @@ import "testing"
 
 func TestCompileDupRule(t *testing.T) {
 	tests := []struct {
+		name     string
 		first    string
 		numbered string
 		wantErr  bool
 	}{
-		{"%b copy%e", "%b copy %n%e", false}, // stem + extension
-		{"%f.~1~", "%f.~%n~", false},         // full name
-
-		{"%b copy%e", "%f copy %n", true},      // mixed styles
-		{"%b copy", "%b copy %n%e", true},      // missing %e in first
-		{"%b copy%e", "%b copy %n", true},      // missing %e in numbered
-		{"%b%e", "%b copy %n%e", true},         // no text in first
-		{"%b copy %n%e", "%b copy %n%e", true}, // %n in first
-		{"%b copy %x%e", "%b copy %n%e", true}, // bad placeholder in first
-		{"%b copy%e", "%b copy%e", true},       // no %n in numbered
-		{"%b copy%e", "%b copy %n %n%e", true}, // two %n in numbered
-		{"%b copy%e", "%b%n%e", true},          // no text before %n
-		{"%b copy%e", "%b copy %n %x%e", true}, // bad placeholder in numbered
+		{
+			name:     "StemExtStyle",
+			first:    "%b copy%e",
+			numbered: "%b copy %n%e",
+		},
+		{
+			name:     "FullNameStyle",
+			first:    "%f.~1~",
+			numbered: "%f.~%n~",
+		},
+		{
+			name:     "StyleMismatch",
+			first:    "%b copy%e",
+			numbered: "%f copy %n",
+			wantErr:  true,
+		},
+		{
+			name:     "FirstNoExt",
+			first:    "%b copy",
+			numbered: "%b copy %n%e",
+			wantErr:  true,
+		},
+		{
+			name:     "NumberedNoExt",
+			first:    "%b copy%e",
+			numbered: "%b copy %n",
+			wantErr:  true,
+		},
+		{
+			name:     "FirstNoText",
+			first:    "%b%e",
+			numbered: "%b copy %n%e",
+			wantErr:  true,
+		},
+		{
+			name:     "FirstHasNumber",
+			first:    "%b copy %n%e",
+			numbered: "%b copy %n%e",
+			wantErr:  true,
+		},
+		{
+			name:     "FirstBadPlaceholder",
+			first:    "%b copy %x%e",
+			numbered: "%b copy %n%e",
+			wantErr:  true,
+		},
+		{
+			name:     "NumberedNoNumber",
+			first:    "%b copy%e",
+			numbered: "%b copy%e",
+			wantErr:  true,
+		},
+		{
+			name:     "NumberedTwoNumbers",
+			first:    "%b copy%e",
+			numbered: "%b copy %n %n%e",
+			wantErr:  true,
+		},
+		{
+			name:     "NumberedNoText",
+			first:    "%b copy%e",
+			numbered: "%b%n%e",
+			wantErr:  true,
+		},
+		{
+			name:     "NumberedBadPlaceholder",
+			first:    "%b copy%e",
+			numbered: "%b copy %n %x%e",
+			wantErr:  true,
+		},
 	}
 
 	for _, test := range tests {
-		_, err := compileDupRule(test.first, test.numbered)
-		if gotErr := err != nil; gotErr != test.wantErr {
-			t.Errorf("compileDupRule(%q, %q) got error %v; want error %v", test.first, test.numbered, gotErr, test.wantErr)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			_, err := compileDupRule(test.first, test.numbered)
+			if (err != nil) != test.wantErr {
+				t.Errorf("compileDupRule(%q, %q) error = %v, want error presence = %t", test.first, test.numbered, err, test.wantErr)
+			}
+		})
 	}
 }
 
@@ -77,7 +137,7 @@ func TestParseAndFormat(t *testing.T) {
 
 	for _, test := range tests {
 		if got := next(test.rule, test.name); got != test.want {
-			t.Errorf("next(%q) = %q; want %q", test.name, got, test.want)
+			t.Errorf("next(%q) = %q, want %q", test.name, got, test.want)
 		}
 	}
 }
