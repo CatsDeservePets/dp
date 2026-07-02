@@ -30,7 +30,7 @@ file copy.txt   -> file copy 2.txt
 file copy 2.txt -> file copy 3.txt
 ```
 
-Path contents are duplicated roughly like `cp -R`: directories are traversed recursively, symlinks are not followed, and regular files are copied. `dp` preserves permission bits, but not ownership, timestamps, ACLs, or extended attributes.
+Path contents are duplicated roughly like `cp -R`: directories are traversed recursively, symlinks are not followed, and regular files are copied. For files, the source mode is modified by the process umask. Created directories have the same mode as their source after their contents have been copied. Ownership, timestamps, ACLs, and extended attributes are not preserved.
 
 Each command-line argument is handled independently. If duplicating one argument fails, `dp` reports the error and continues with the next argument.
 
