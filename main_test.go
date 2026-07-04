@@ -14,6 +14,7 @@ func TestNextDupPath(t *testing.T) {
 
 	writeFile(t, "file.txt", "")
 	writeFile(t, "file copy.txt", "")
+	writeFile(t, "file copy 2.txt", "")
 	writeFile(t, "dir/file.txt", "")
 
 	rule := mustCompileDupRule(t, "%b copy%e", "%b copy %n%e")
@@ -25,9 +26,9 @@ func TestNextDupPath(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "FirstDuplicateExists",
+			name: "ExistingDuplicates",
 			src:  "file.txt",
-			want: "file copy 2.txt",
+			want: "file copy 3.txt",
 		},
 		{
 			name: "NestedFile",
