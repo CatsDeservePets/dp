@@ -1,8 +1,8 @@
 # dp
 
-`dp` duplicates files and directories in place, like duplicating an item in a file manager.
+`dp` generates predictable duplicate names, like duplicating an item in a file manager.
 
-It is meant for quick local duplication with predictable file names, not for archiving or backups.
+It can duplicate files and directories itself, or provide the destination for use with another tool.
 
 ## Installation
 
@@ -23,9 +23,7 @@ usage: dp [-n] [-v] source ...
 
 ## Semantics
 
-`dp` writes each duplicate next to its source path. If the generated name already exists, it picks the next available duplicate name.
-
-By default, `dp` uses Finder-like names:
+By default, `dp` uses Finder-like duplicate names:
 
 ```
 file.txt        -> file copy.txt
@@ -35,7 +33,15 @@ file copy 2.txt -> file copy 3.txt
 
 Path contents are duplicated roughly like `cp -R`: directories are traversed recursively, symlinks are not followed, and regular files are copied. For files, the source mode is modified by the process umask. Created directories have the same mode as their source after their contents have been copied. Ownership, timestamps, ACLs, and extended attributes are not preserved.
 
-Each command-line argument is handled independently. If duplicating one argument fails, `dp` reports the error and continues with the next argument.
+Each command-line argument is handled independently. If a source cannot be duplicated, `dp` reports the error and continues with the next argument. An error during copying may leave a partially copied duplicate in place.
+
+For more control over copying, use `-g` and pass the resulting pathname to another tool:
+
+```shell
+src="$1"
+dst=$(dp -g "$src") || exit
+cp -Rp "$src" "$dst"
+```
 
 ## Naming
 
