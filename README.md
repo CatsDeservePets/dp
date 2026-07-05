@@ -14,6 +14,9 @@ go install github.com/CatsDeservePets/dp@latest
 
 ```
 usage: dp [-n] [-v] source ...
+       dp -g source
+
+  -g	generate a duplicate pathname and write it to standard output
   -n	do not duplicate files, but show what would be done instead; implies -v
   -v	cause dp to be verbose, showing files as they are duplicated
 ```

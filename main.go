@@ -18,14 +18,32 @@ const (
 )
 
 var (
-	dryRun  = flag.Bool("n", false, "do not duplicate files, but show what would be done instead; implies -v")
-	verbose = flag.Bool("v", false, "cause dp to be verbose, showing files as they are duplicated")
+	generate = flag.Bool("g", false, "generate a duplicate pathname and write it to standard output")
+	dryRun   = flag.Bool("n", false, "do not duplicate files, but show what would be done instead; implies -v")
+	verbose  = flag.Bool("v", false, "cause dp to be verbose, showing files as they are duplicated")
 )
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: dp [-n] [-v] source ...")
+	fmt.Fprintln(os.Stderr, "       dp -g source")
+	fmt.Fprintln(os.Stderr)
 	flag.PrintDefaults()
 	os.Exit(2)
+}
+
+func validateUsage() {
+	switch {
+	case *generate && *dryRun:
+		log.Print("the -g and -n options may not be specified together")
+	case *generate && *verbose:
+		log.Print("the -g and -v options may not be specified together")
+	case *generate && flag.NArg() == 1:
+		return
+	case !*generate && flag.NArg() > 0:
+		return
+	}
+
+	flag.Usage()
 }
 
 func main() {
@@ -33,9 +51,7 @@ func main() {
 	log.SetPrefix("dp: ")
 	flag.Usage = usage
 	flag.Parse()
-	if flag.NArg() == 0 {
-		flag.Usage()
-	}
+	validateUsage()
 
 	rule, err := compileDupRule(
 		cmp.Or(os.Getenv("DUPFMT_FIRST"), defaultFirst),
@@ -44,6 +60,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("bad duplicate format: %v", err)
 	}
+
+	if *generate {
+		dst, err := nextDupPath(flag.Arg(0), rule)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(dst)
+		return
+	}
+
 	cp := copier{
 		dryRun:  *dryRun,
 		verbose: *verbose,
